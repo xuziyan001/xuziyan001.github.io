@@ -1,0 +1,12 @@
+# Site settings
+title: Welcome!
+email: ziyan.xzy@alibaba-inc.com
+description: "This is a beta version of my blog, I'll consummate it as soon as I can."
+baseurl: ""
+url: "http://xuziyan001.github.io"
+twitter_username: don't have yet
+github_username:  xuziyan001
+
+# Build settings
+markdown: kramdown
+permalink: pretty
