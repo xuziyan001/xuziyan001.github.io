@@ -92,7 +92,7 @@ Maze* MazeGame::CreateAnotherMaze(MazeBuilder& builder)
 <h3>Factory Method(工厂方法)</h3>
 <p>
 其实上述抽象工厂就是使用工厂方法实现的，工厂方法定义一个用于创建对象的接口，让子类来决定实例化哪一个类。这里介绍一个我个人觉得很酷的，使用模板来避免创建子类的方法。<br>
-工厂方法有一个潜在的问题就是可能仅为了创建合适的Product对象而迫使你创建Create子类，这时，我们可以提供一个Creator的模板子类，它使用Product类作为模板参数：
+工厂方法有一个潜在的问题就是可能仅为了创建合适的Product对象而迫使你创建Creator子类，这时，我们可以提供一个Creator的模板子类，它使用Product类作为模板参数：
 {% highlight ruby %}
 class Creator{
   public:
@@ -118,4 +118,4 @@ public:
 StandardCreator<MyProduct> myCreator;
 {% endhighlight %}
 </p>
-<font size="2" color="grey">未完。。。</font>
+<font size="2" color="grey">未完。。。这个代码高亮丑爆了 有时间得重写个。。</font>
