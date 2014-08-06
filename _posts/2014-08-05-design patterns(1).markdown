@@ -23,7 +23,7 @@ public:
     {return new Room(n);}
   virtual Door* MakeDoor(Room* r1, Room* r2) const
     {return new Door(r1,r2);}
-	};
+};
 {% endhighlight %}
 类MazeFactory作为一个抽象工厂，它建造房间，墙壁，房间之间的门，建造迷宫的程序将MazeFactory作为一个参数，就可以指定要创建迷宫的所有组件。当我们要创建另一个魔法型迷宫时，我们可以创建实例工厂EnchantedMazeFactory去重定义不同的成员函数并返回组件的不同子类。
 {% highlight ruby %}
@@ -36,7 +36,7 @@ public:
     {return new DoorNeedingSpell(r1,r2);}
 protected:
   Spell* CastSpell() const;
-  };
+};
 {% endhighlight %}
 这样，CreateMaze就可以接受一个EnchantedMazeFactory实例来建造魔法型迷宫：
 {% highlight ruby %}
@@ -59,7 +59,7 @@ public:
 protected:
   MazeBuilder(); 
   //受保护的构造函数，不能自己创建，只通能过子类进行创建？
-  };
+};
 {% endhighlight %}
 子类StandardMazeBuilder是一个创建迷宫的简单实现：
 {% highlight ruby %}
@@ -73,7 +73,7 @@ public:
 private:
   Direction CommonWall(Room*, Room*);
   Maze* _currentMaze;
-  };
+};
 {% endhighlight %}
 现在，我们就可以用CreateMaze和StandardMazeBuilder来创建一个迷宫：
 {% highlight ruby %}
