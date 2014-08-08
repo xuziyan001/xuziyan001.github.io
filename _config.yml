@@ -8,5 +8,6 @@ weibo_username: 葡萄小芄吇_333
 github_username:  xuziyan001
 
 # Build settings
-markdown: kramdown
+highlighter: pygments
+markdown: redcarpet
 permalink: pretty
