@@ -9,5 +9,7 @@ github_username:  xuziyan001
 
 # Build settings
 highlighter: pygments
+#auto: true
 markdown: redcarpet
 permalink: pretty
+
