@@ -1,4 +1,4 @@
- ---
+---
 layout: post
 title:  "Design Patterns(4)"
 date:   2014-08-25 10:20:00
