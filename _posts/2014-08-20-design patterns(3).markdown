@@ -337,8 +337,43 @@ void DerivedClass::HookOperation(){
 <p>
 访问者模式是整本书中的最后一种设计模式，实际上，访问者模式相当于给各个被访问的元素提供一层间接，访问者类中可以定义作用于这些元素的新操作而不改变各元素的类。访问者可以集中相关的操作而分离无关的操作，使得易于增加新的操作。
 </p>
-
-<font size="2" color="grey">要写吐了。。留一丁丁下周过来补完吧。。。</font>
+{%highlight cpp%}
+class Equipment{
+public:
+  virtual ~Equipment();
+  const char* Name(){return _name;};
+  virtual void Accept(EquipmentVisitor&);
+  //...
+protected:
+  Equipment(const char*);
+private:
+  const char* _name;
+};
+{%endhighlight%}
+这里是Composite中的Equipment类，我们添加一个Accept操作，使其可以和Visitor一起工作。Equipment的子类可以重新定义它的Accept操作。EquipmentVisitor类也是一个抽象父类，它对每个设备子类都有一个虚函数，所以虚函数的缺省行为都是什么也不做。
+{%highlight cpp%}
+class EquipmentVisitor{
+public:
+  virtual ~EquipmentVisitor();
+  virtual void VisitA(A*);
+  virtual void VisitB(B*);
+  //...
+protected:
+  EquipmentVisitor();
+};
+{%endhighlight%}
+Equipment子类以基本相同的方式定义Accept：调用EquipmentVisitor中的对应于接受Accept请求的类的操作:
+{%highlight cpp%}
+void A::Accept(EquipmentVisitor& visitor){
+  for(ListIterator<Equipment*> i(_parts);!i.IsDone();i.Next()){//遍历各个构件并调用它们的Accept操作
+    i.CurrentItem()->Accept(visitor);
+  }
+  visitor.VisitA(this);//传this指针！
+}
+{%endhighlight%}
+好啦，终于把书上总结的所有方法都大概阐述了一遍，当然其中不乏偷懒少写了代码和半懂不懂糊弄过去的一些设计模式，而且各设计模式的排版和用途解释也是按照自己的理解写上去的，有时间应该要好好读一读然后优化一下。。。<br>
+之后还会对所有的设计模式做一个最后的总结，顺便再回顾一下这一本折磨了我三周的书。<br>
+<font size="2" color="grey">要写吐了。。。</font>
 
 
 
