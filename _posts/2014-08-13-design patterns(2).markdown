@@ -71,7 +71,7 @@ public:
   //显式的父部件引用，需要维护一个不变式，即一个组合的所有子节点都以这个组合为父节点
   virtual Composite* GetComposite() {return 0;}//返回空指针的缺省操作
 };
-class Composite : public Composite {
+class Composite : public Component {
 public:
   void Add(Component*);
   void Remove(Component*)
@@ -82,9 +82,9 @@ class Leaf : public Component {
   //...
 };
 {%endhighlight%}
-在设计组合模式的时候，需要注意几个问题:
+在设计组合模式的时候，需要注意几个问题:<br>
 <table border="0">
-  <tr>1、组合模式的目的之一就是使得用户不知道他们正在使用的是Leaf还是Composite类，为了达到这一目的，我们应该最大化Component接口，并由它为这些操作提供缺省的实现。</tr><br>
+  <tr>1、组合模式的目的之一就是使得用户不知道他们正在使用的是Leaf还是Composite类，为了达到这一目的，我们应该<b>最大化Component接口</b>，并由它为这些操作提供缺省的实现。</tr><br>
   <tr>2、在没有GC的语言中，当一个Composite被销毁时，最好由Composite负责删除其子节点。</tr><br> <tr>3、Component类应该要声明一个CreateIterator操作来访问它的零件，这个操作的缺省实现返回一个NullIterator。</tr>
   
 </table>
@@ -157,7 +157,7 @@ void Compiler::Compile(istream& input, ByteCodeStream& output) {
   parseTree->Traverse(generator);
 }
 {%endhighlight%}
-当然，编译器的外观还可以对Scanner和ProgramNodeBuilder这样的参与者进行参数化以正价系统的灵活性，但是这并非外观模式的主要任务，它的任务是为一般情况简化接口。并且通常来讲，仅需要一个Facade对象，因此Facade对象属于Singleton模式。
+当然，编译器的外观还可以对Scanner和ProgramNodeBuilder这样的参与者进行参数化以增加系统的灵活性，但是这并非外观模式的主要任务，它的任务是为一般情况简化接口。并且通常来讲，仅需要一个Facade对象，因此Facade对象属于Singleton模式。
 </p>
 <h3>Flyweight(享元)</h3>
 <p>
@@ -167,7 +167,7 @@ Flyweight的意思是“蝇量级”，由名字可以看出这一设计模式�
 享元模式运用共享技术有效地支持大量细粒度的对象，这里，flyweight是一个共享对象，它可以在多个场景下使用(context)，并且在每个场景中都可以作为一个独立的对象，它的关键概念是<b>内部状态</b>和<b>外部状态</b>之间的区别。内部状态存储于flyweight中，它包含了独立于flyweight场景的信息，它可以被共享；而外部状态取决于Flyweight场景，并根据场景而变化，因此不可共享。用户对象负责在必要的时候将外部状态传递给flyweight。
 </p>
 <p>
-无奈此模式的代码太多，这里就不贴出来了。享元模式在文档编辑器中使用得比较多，它不用为了每一个字符创建一个单独的对象，只需在FlyweightFactory中保持一个相关的关联存储，仅在每次被调用的时候实例化一个新对象，这样就可以大幅度减少程序的存储开销。享元模式通常和组合模式结合起来，用共享叶节点的有向五环图实现一个逻辑上的层次结构。
+无奈此模式的代码太多，这里就不贴出来了。享元模式在文档编辑器中使用得比较多，它不用为了每一个字符创建一个单独的对象，只需在FlyweightFactory中保持一个相关的关联存储，仅在每次被调用的时候实例化一个新对象，这样就可以大幅度减少程序的存储开销。享元模式通常和组合模式结合起来，用共享叶节点的有向无环图实现一个逻辑上的层次结构。
 </p>
 <h3>Proxy(代理)</h3>
 <p>
