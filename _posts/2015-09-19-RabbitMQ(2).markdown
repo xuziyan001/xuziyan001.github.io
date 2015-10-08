@@ -70,10 +70,7 @@ rabbitmq提供了一些可视化管理插件，使用方法如下：
   <li>
   首先启用管理插件：
   {% highlight console %}
-  rabbitmqctl list_user_permissions admin
-  {% endhighlight %}
-  {% highlight console %}
-  rabbitmqctl list_user_permissions answer
+  rabbitmq-plugins enable rabbitmq_management
   {% endhighlight %}
   </li>
   <li>
@@ -86,14 +83,4 @@ rabbitmq提供了一些可视化管理插件，使用方法如下：
 <p>
 在单点MQ支撑不住的情况下，rabbitmq也可以支持动态的集群配置，并提供了相关的Parameter以及Policy配置，这里有点偷懒了，之后如果要上集群的话可以进一步调研。<a href="http://www.rabbitmq.com/man/rabbitmqctl.1.man.html#Access%20control">rabbitmq集群相关配置</a>
 </p>
-
-
-
-
-
-
-
-
-
-
 

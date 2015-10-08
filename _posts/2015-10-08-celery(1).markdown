@@ -1,0 +1,181 @@
+---
+layout: post
+title:  "celery(1)"
+date:   2015-10-08 11:58:00
+categories: Lejent update
+---
+<p>
+作为分布式调度系统，celery真正承载了异步任务消息的分发以及对消息队列的控制。通过对所监视队列的监听，独立的celery worker进程持续处理队列中的新消息，而RabbitMQ相当于任务生产者与实际worker之间的通道，下面简单的做一个celery的demo。
+</p>
+<h3>Configuration</h3>
+<p>
+模块的配置最好还是和应用的实体分离，所以这边推荐模块化的配置方式，将所有的相关配置都写在一个配置文件中：<br />
+{% highlight python %}
+# celeryconfig.py
+from __future__ import absolute_import
+BROKER_URL = 'amqp://guest:guest@localhost:5672'
+CELERY_RESULT_BACKEND = 'amqp://'
+CELERY_TIMEZONE = 'Asia/Shanghai'
+CELERY_ENABLE_UTC = True
+CELERT_ROUTES = {
+        'tasks.add': 'low-priority',
+                'tasks.mul': 'high-priority', 
+                }
+{% endhighlight %}
+celery也就是用一些常量来控制celery的行为，这些常量在程序中都有一个默认值，通过config_from_object()方法，一个celery app的实例就可以从配置文件中获取新的配置值，所有的配置参数在<a href="http://docs.celeryproject.org/en/latest/configuration.html">这里</a>。
+</p>
+<h3>Application & Tasks</h3>
+<p>
+Application就是Celery的一个实例，通过配置文件的方式，Application在声明时就不需要提供太多额外参数，大部分情况下只需提供一个app_name即可：<br />
+{% highlight python %}
+from celery import Celery
+app = Celery('lejent')
+{% endhighlight %}
+Task使用标签化的方法，指定一个Application，或者公用的任务方法：
+{% highlight python %}
+@app.task(max_retries=3)
+def add(x, y):
+  return x + y
+{% endhighlight %}
+task标签中也可以定义max_retries, rate_limit等配置参数，重要的是，由于异步任务不能保证请求处理的顺序以及消息处理的次数，所以所有的worker需要通过事务或者状态引擎来保证自身的幂等性。
+任务一旦被创建，celery提供三种方式调用tasks:
+<ul>
+  <li>__call__，不走消息通道，对任务直接同步调用。</li>
+  <li>apply_async，标准的异步调用，支持eta，countdown，expires，retry等参数，为异步调用选择通道及相应的策略。</li>
+  <li>delay，apply_async的简化接口，不提供执行执行条件，采用默认策略执行异步调用。</li>
+</ul>
+</p>
+<h3>Subtask & Work Flow</h3>
+<p>
+异步任务可以被分为一系列的子任务，它可以将一个任务的部分参数传递并且等待另一部分参数回调，从而形成任务执行链。celery提供一系列的原语来控制任务的执行流。
+<h4>chain</h4>
+{% highlight python %}
+res = chain(add.s(2, 2), add.s(4), add.s(8))()
+res.get() #2+2+4+8=16
+{% endhighlight %}
+将前一个任务返回值传递给下一个子任务，以此类推。
+<h4>group</h4>
+{% highlight python %}
+res = group(add.s(i, i) for i in xrange(6))()
+res.get(timeout=1) #[0,2,4,6,8,10]
+{% endhighlight %}
+group内的所有子任务是并发执行的，在get的时候会等待所有任务全部完成之后返回。
+<h4>chord</h4>
+{% highlight python %}
+res = chord((add.s(i, i) for i in xrange(10)), xsum.s())()
+res.get() #90
+{% endhighlight %}
+chord将任务串起来，其实原理同下：
+{% highlight python %}
+res = (group(add.s(i, i) for i in xrange(10)) | xsum.s())()
+res.get() #90
+{% endhighlight %}
+<h4>map & startmap</h4>
+与group不同，map只传递一个message，函数计算是线性的，和python内置的map类似；starmap用来传递iterable的对象：
+{% highlight python %}
+~add.starmap(zip(range(10), range(10)))
+# [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+{% endhighlight %}
+~是对异步任务调用加等待返回的简写，如上调用直接等待任务get后的返回值。
+<h4>chunks</h4>
+chunks可以将多个任务进行分块，在高负荷情况下平衡并行度和message头开销：
+{% highlight python %}
+add.chunks(zip(range(100), range(100)), 10)
+{% endhighlight %}
+</p>
+<h3>Monitoring</h3>
+<p>
+Celery在命令行提供了一系列的对worker的监控机制，但最方便的还是通过网页可视化监控比较方面。Flower就是一个实时监控管理的工具，首先安装包：<br />
+{% highlight console %}
+pip install flower
+{% endhighlight %}
+然后对当前worker启动监控：
+{% highlight console %}
+celery -A proj flower
+{% endhighlight %}
+flower的默认端口是5555，直接打开浏览器就可以监控当前机器的celery工作状态。
+</p>
+<h3>Start</h3>
+<p>
+现在启动我们的celery进程，首先保证rabbitmq已经启动完毕，然后启动celery worker，进程要多多多：<br />
+{% highlight python %}
+celery multi start 2 -A task.tasks -l info -c47 --pidfile=./%n.pid
+{% endhighlight %}
+启动两个worker（multi start 2），每个worker 48个进程（c47）
+</p>
+<h3>Demo source</h3>
+{% highlight python %}
+# -*- coding: utf-8 -*-
+# task/celery_app.py
+"""
+basic app config
+"""
+from __future__ import absolute_import
+from celery import Celery
+import tasks.celeryconfig
+app = Celery('test')
+app.config_from_object('tasks.celeryconfig')
+if __name__ == "__main__":
+    app.start()
+{% endhighlight %}
+{% highlight python %}
+# -*- coding: utf-8 -*-
+# task/celeryconfig.py
+"""
+config file for celery task
+"""
+from __future__ import absolute_import
+BROKER_URL = 'amqp://guest:guest@localhost:5672'
+CELERY_RESULT_BACKEND = 'amqp://'
+CELERY_TIMEZONE = 'Asia/Shanghai'
+CELERY_ENABLE_UTC = True
+CELERT_ROUTES = {
+        'tasks.add': 'low-priority',
+        'tasks.mul': 'high-priority', 
+            }
+{% endhighlight %}
+{% highlight python %}
+# -*- coding: utf-8 -*-
+# task/tasks.py
+"""
+core tasks
+"""
+from __future__ import absolute_import
+from .celery_app import app
+import time
+@app.task
+def add(x, y):
+    time.sleep(0.3)
+    return x+y
+@app.task
+def mul(x, y):
+    return x*y
+@app.task
+def xsum(x):
+    return sum(x)
+{% endhighlight %}
+{% highlight python %}
+#/usr/bin/python
+# -*- coding: utf-8 -*-
+# test.py
+"""
+async tasks test file
+"""
+from __future__ import absolute_import
+from celery import group, chain, chord
+from tasks.tasks import add, mul, xsum
+def test_chain():
+    result = chain(add.s(4,4) | mul.s(8) | add.s(9))
+    print "done"
+    print result().get()
+def test_group():
+    result = (group(add.s(i,i) for i in xrange(10)) | xsum.s())()
+    print "done"
+    print result.get()
+if __name__ == "__main__":
+    test_group() 
+{% endhighlight %}
+
+
+
+
