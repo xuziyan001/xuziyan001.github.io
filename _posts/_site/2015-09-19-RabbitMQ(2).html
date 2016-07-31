@@ -1,0 +1,80 @@
+<p>
+这次我们来简单了解一下rabbitmq的权限控制与管理。
+</p>
+<h3>rabbitmq权限控制</h3>
+<p>
+每次启动server的时候，server会创建一个根vhost，也就是/目录，并为这个目录配置一个guest用户，用户名和密码都是guest，它可以访问/下的所有资源，但只能支持本地访问。如果需要支持远程访问，则需要增加配置：<br />
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">[{ rabbit: [{ loopback_users, [] }] }]</span></code></pre></div>
+
+所谓资源，也就是在一个vhost目录下定义的queues，exchanges和其他命名实体，举个简单的例子来说明rabbitmq的配置过程，比如我们的答疑系统，我们为它：
+<ul>
+  <li>创建一个vhost，名字叫做answer：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl add_vhost answer</span></code></pre></div>
+
+  然后查看现在的vhosts，就可以看到我们新增加的vhost：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl list_vhosts</span></code></pre></div>
+
+  </li>
+  <li>
+  然后我们创建两个用户，一个用于管理rabbitmq，一个用于访问answer：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl add_user admin aa</span></code></pre></div>
+
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl add_user answer answer</span></code></pre></div>
+
+  其中管理者管理者账号为admin，密码为aa；answer访问者密码为answer；然后我们为这两个用户贴个标签识别一下：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl set_user_tags admin administrator</span></code></pre></div>
+
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl set_user_tags answer management</span></code></pre></div>
+
+  我们可以通过命令行查看所有用户，就可以看到我们新增的两个用户：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl list_users</span></code></pre></div>
+
+  </li>
+  <li>
+  最后我们分别为两个账号创建访问权限:
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl set_permissions –p / admin &#39;.*&#39; &#39;.*&#39; &#39;.*&#39;</span></code></pre></div>
+
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl set_permissions –p /answer answer &#39;^answer.*&#39; &#39;.*&#39; &#39;.*&#39;</span></code></pre></div>
+
+  以answer用户为例，这里的意思是answer用户在/answer这个vhost下拥有可以配置以answer开头的所有资源的权限和所有资源的读，写权限，但不建议这么设置，因为对rabbitmq不是特别了解的话，可能会因为配置权限的问题登录不上去，没有特殊需求的话还是应该设置成通配符。 <br />
+  我们可以通过命令行查看所有用户的权限：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl list_user_permissions admin</span></code></pre></div>
+
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmqctl list_user_permissions answer</span></code></pre></div>
+
+  </li>
+</ul>
+</p>
+<h3>rabbitmq可视化管理</h3>
+<p>
+rabbitmq提供了一些可视化管理插件，使用方法如下：
+<ul>
+  <li>
+  首先启用管理插件：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">rabbitmq-plugins enable rabbitmq_management</span></code></pre></div>
+
+  </li>
+  <li>
+  然后在15672端口就可以查看rabbitmq的资源使用情况:
+  http://${server-name}:15672/
+  </li>
+</ul>
+</p>
+<h3>rabbitmq集群管理</h3>
+<p>
+在单点MQ支撑不住的情况下，rabbitmq也可以支持动态的集群配置，并提供了相关的Parameter以及Policy配置，这里有点偷懒了，之后如果要上集群的话可以进一步调研。<a href="http://www.rabbitmq.com/man/rabbitmqctl.1.man.html#Access%20control">rabbitmq集群相关配置</a>
+</p>
+

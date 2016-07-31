@@ -1,0 +1,138 @@
+<p>
+好久没有鼓捣这玩意儿了，时隔一年又捡起来，谁叫又到了找工作的时间了呢。
+</p>
+<p>
+这次我们需要使用RabbitMQ以及celery打造一个分布式异步调度解决方案，其中RabbitMQ作为MsgBroker中间件，celery负责分布式任务的分发和调度。首先我们从相对简单的RabbitMQ入手，剖析一下RabbitMQ的原理，配置及使用，然后在看看高大上的celery。其中<a href="https://github.com/rabbitmq/rabbitmq-server">RabbitMQ</a>是用Erlang写的，在<a href="https://github.com/celery/celery">celery</a>是python写的，并在均在github上开源。有时间应该要把它们的源码拉下来好好看看，学习更加底层的实现。
+</p>
+<h3>RabbitMQ介绍</h3>
+<p>
+RabbitMQ是一个由Erlang实现的AMQP(Advanced Message Queue)开源实现，主要用于异步消息处理，用以保证信息发送者与接收者的解耦合以及信息的完整性，其系统架构如下：
+<div>
+<img src="/src/RabbitMQ1.png" />
+</div>
+整个系统架构很简单，左右两侧的client分别为消息的生产者与接收者，中间的RabbitMQ Server作为一种传输服务，维护一条从Producer到Consumer的路线，保证数据能够按照指定的方式进行传输。这里指明几个概念：
+<ul>
+  <li>Exchanges： 生产者发布消息的地方</li>
+  <li>Queues： 消息最终被消费者接收的地方</li>
+  <li>Bindings：指定消息如何从Exchanges到Queues的路由</li>
+  <li>Connection： 一个TCP连接，生产者，消费者都是通过TCP连接到RabbitMQ Server的</li>
+  <li>Channels： 虚拟连接，建立在TCP连接之上，数据流动都是在Channel中。Channel的使用是为了降低建立和关闭TCP连接的代价</li>
+</ul>
+</p>
+<h4>消息的确认</h4>
+<p>
+默认情况下，如果Message 已经被某个Consumer正确的接收到了（通过发送ack），那么该Message就会被从queue中移除。如果这个queue有数据到达，那么这个数据会被cache，不会被丢弃。当有Consumer时，这个数据会被立即发送到这个Consumer，这个数据被Consumer正确收到时，这个数据就被从queue中删除。<br />
+当一个Consumer长时间不回送ack，则RabbitMQ Server不会再发送数据给它，并认为这个Consumer处理能力有限。这种ack的机制可以起到限流的作用（Benefitto throttling），有效的处理负载均衡。
+</p>
+<h4>Queue的创建</h4>
+<p>
+如果queue不存在，当然Consumer不会得到任何的Message。但是如果queue不存在，那么Producer Publish的Message会被丢弃。所以，还是为了数据不丢失，Consumer和Producer都try to create the queue！第二次创建已经存在的Queue不会对Queue的属性作任何更改。
+</p>
+<h4>Exchanges</h4>
+<p>有三种类型的Exchanges，每个实现了不同的路由算法：</p>
+<ul>
+  <li>Direct exchanges： 根据routing key直接路由，在Queue创建时，它会自动以queue的名字作为routing key来绑定exchange</li>
+  <li>Fanout exchange： 向响应的queue进行广播</li>
+  <li>Topic exchange： 对routing key进行模式匹配</li>
+</ul>
+<h4>Virtual Hosts</h4>
+<p>
+以mac作为server，python作为client为例：<br />
+首先安装AMQP的python library，使用pip简单安装，有一下几个包可以使用：<br />
+<ul>
+  <li>py-amqplib</li>
+  <li>txAMQP</li>
+  <li>pika</li>
+</ul>
+这里我安装的是pika。然后安装RabbitMQ Server，使用brew安装：
+
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">sudo brew install rabbitmq</span></code></pre></div>
+
+然后进入RabbitMQ安装目录的sbin目录并运行：
+
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">sudo ./rabbitmq-server detached</span></code></pre></div>
+
+服务就起来了。<br />
+下面简单写一段生产者／消费者的代码。
+</p>
+<h3>生产者</h3>
+
+<div class="highlight"><pre><code class="language-python" data-lang="python"><span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">pika</span>
+<span class="c">#建立连接</span>
+<span class="n">connection</span> <span class="o">=</span> <span class="n">pika</span><span class="o">.</span><span class="n">BlockingConnection</span><span class="p">(</span><span class="n">pika</span><span class="o">.</span><span class="n">ConnectionParameters</span><span class="p">(</span>
+        <span class="n">host</span><span class="o">=</span><span class="s">&#39;localhost&#39;</span><span class="p">))</span>
+<span class="n">channel</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">channel</span><span class="p">()</span>
+<span class="c">#声明queue</span>
+<span class="n">channel</span><span class="o">.</span><span class="n">queue_declare</span><span class="p">(</span><span class="n">queue</span><span class="o">=</span><span class="s">&#39;hello&#39;</span><span class="p">)</span>
+<span class="c">#使用默认的exchange，指定routing_key</span>
+<span class="n">channel</span><span class="o">.</span><span class="n">basic_publish</span><span class="p">(</span><span class="n">exchange</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                      <span class="n">routing_key</span><span class="o">=</span><span class="s">&#39;hello&#39;</span><span class="p">,</span>
+                      <span class="n">body</span><span class="o">=</span><span class="s">&#39;Hello World!&#39;</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot; [x] Sent &#39;Hello World!&#39;&quot;</span>
+<span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></code></pre></div>
+
+<h3>消费者</h3>
+
+<div class="highlight"><pre><code class="language-python" data-lang="python"><span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">pika</span>
+<span class="c">#同样需要建立连接以及声明queue，原因在上面已经提及</span>
+<span class="n">connection</span> <span class="o">=</span> <span class="n">pika</span><span class="o">.</span><span class="n">BlockingConnection</span><span class="p">(</span><span class="n">pika</span><span class="o">.</span><span class="n">ConnectionParameters</span><span class="p">(</span>
+        <span class="n">host</span><span class="o">=</span><span class="s">&#39;localhost&#39;</span><span class="p">))</span>
+<span class="n">channel</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">channel</span><span class="p">()</span>
+<span class="n">channel</span><span class="o">.</span><span class="n">queue_declare</span><span class="p">(</span><span class="n">queue</span><span class="o">=</span><span class="s">&#39;hello&#39;</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&#39; [*] Waiting for messages. To exit press CTRL+C&#39;</span>
+<span class="c">#声明一个回调函数来处理接收到的数据</span>
+<span class="k">def</span> <span class="nf">callback</span><span class="p">(</span><span class="n">ch</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+    <span class="k">print</span> <span class="s">&quot; [x] Received </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">body</span><span class="p">,)</span>
+<span class="c">#订阅消息</span>
+<span class="n">channel</span><span class="o">.</span><span class="n">basic_consume</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span>
+                      <span class="n">queue</span><span class="o">=</span><span class="s">&#39;hello&#39;</span><span class="p">,</span>
+                      <span class="n">no_ack</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="c">#无限循环监听</span>
+<span class="n">channel</span><span class="o">.</span><span class="n">start_consuming</span><span class="p">()</span></code></pre></div>
+
+<h3>一些扩展</h3>
+<p>
+当然简单的hello world远远不够满足我们的业务需求，这里再做一些简单的概念性的介绍：
+<ul>
+  <li>Round robin：当consumer处理能力不够的时候，我们可以创建多个Virtual Host，默认情况下，RabbitMQ会顺序的分发每个Message，当每个收到ack后，会将Message删除，然后将下一个Message分发到下一个Consumer。
+  </li>
+  <li>Acknowledgment：修改上文中的callback，在消息处理完成后发送ack，那么消息就不会因为consumer挂掉而丢失，但如果忘记回送ack，那么消息就会在Server堆积导致内存爆掉。这时可以通过sbin文件夹下的控制脚本调试错误：
+  
+<div class="highlight"><pre><code class="language-console" data-lang="console"><span class="go">sudo ./rabbitmqctl list_queues name message_ready message_unacknowledged</span></code></pre></div>
+
+  </li>
+  <li>Durability: 关于持久化的问题，除了2中的ack机制，我们还需要持久化queue，防止Server crash：
+  
+<div class="highlight"><pre><code class="language-python" data-lang="python"><span class="n">channel</span><span class="o">.</span><span class="n">queue_declare</span><span class="p">(</span><span class="n">queue</span><span class="o">=</span><span class="s">&#39;task_queue&#39;</span><span class="p">,</span> <span class="n">durable</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span></code></pre></div>
+
+  持久化Message：
+  
+<div class="highlight"><pre><code class="language-python" data-lang="python"><span class="n">channel</span><span class="o">.</span><span class="n">basic_publish</span><span class="p">(</span><span class="n">exchange</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                        <span class="n">routing_key</span><span class="o">=</span><span class="s">&quot;task_queue&quot;</span><span class="p">,</span>
+                        <span class="n">body</span><span class="o">=</span><span class="n">message</span><span class="p">,</span>
+                        <span class="n">properties</span><span class="o">=</span><span class="n">pika</span><span class="o">.</span><span class="n">BasicProperties</span><span class="p">(</span>
+                        <span class="n">delivery_mode</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="c"># make message persistent))</span></code></pre></div>
+
+  尽管如此，RabbitMQ将Message刷到磁盘是需要一个时间窗的，在这个时间窗内的消息依然有可能丢失，但对于大部分应用而言已经足够。
+  </li>
+  <li>
+  Fair dispatch：由于Round robin的方式会导致consumer负载不均衡，我们可以使用channel.basic_qos(prefetch_count=1)来控制每个consumer每次处理的负载，但这需要精确的估算来保证queue不会被堆满。
+  </li>
+  <li>
+  Binding: 通过绑定exchange与queue，来实现消息的路由：
+  
+<div class="highlight"><pre><code class="language-python" data-lang="python"><span class="n">channel</span><span class="o">.</span><span class="n">queue_bind</span><span class="p">(</span><span class="n">exchange</span><span class="o">=</span><span class="s">&#39;logs&#39;</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">method</span><span class="o">.</span><span class="n">queue</span><span class="p">)</span></code></pre></div>
+
+  </li>
+</ul>
+</p>
+<h3>关于序列化</h3>
+<p>
+一般来说，如果我们使用python的话，都会使用它内置的序列化工具pickle或者json，但是RabbitMQ推荐使用由Google开发的另一种序列化格式ProtoBuf(Google Protocol Buffer)，它比较json有更加轻量级的优势，具体的特性以及使用可以见下：<br />
+<a href="http://www.ibm.com/developerworks/cn/linux/l-cn-gpb/">Protobuf特性</a>
+<br />
+<a href="https://developers.google.com/protocol-buffers/">Protobuf的使用</a>
+</p>
+
